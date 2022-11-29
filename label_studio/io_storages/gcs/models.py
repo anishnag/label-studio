@@ -23,6 +23,8 @@ from django.db.models.signals import post_save
 from io_storages.base_models import ImportStorage, ImportStorageLink, ExportStorage, ExportStorageLink
 from tasks.models import Annotation
 
+import base64
+
 logger = logging.getLogger(__name__)
 
 clients_cache = {}
@@ -149,6 +151,16 @@ class GCSImportStorage(GCSStorageMixin, ImportStorage):
         # bucket_name = 'your-bucket-name'
         # blob_name = 'your-object-name'
 
+        # Extract trimmed audio parameters, if they exist
+        start, end = None, None
+        partition = blob_name.split("#")
+        blob_name = partition[0]
+        if len(partition) == 2:
+            bounds = partition[1].split(",")
+            start = bounds[0]
+            if len(bounds) == 2:
+                end = bounds[1]
+
         client = self.get_client()
         bucket = self.get_bucket(client, bucket_name)
         blob = bucket.blob(blob_name)
@@ -160,9 +172,17 @@ class GCSImportStorage(GCSStorageMixin, ImportStorage):
             # Allow GET requests using this URL.
             method="GET",
         )
-
         logger.debug('Generated GCS signed url: ' + url)
-        return url
+        trim_url = "https://trimmer-n4ouilzfna-uc.a.run.app"
+        encoded_url = base64.b64encode(url.encode("ascii")).decode("ascii")
+        query_string = ""
+        if start:
+            query_string += f"&start={start}"
+        if end:
+            query_string += f"&end={end}"
+        trimmed_url = f"{trim_url}/?url={encoded_url}{query_string}"
+        logger.debug('Generated trimmed url: ' + trimmed_url)
+        return trimmed_url
 
     def python_cloud_function_get_signed_url(self, bucket_name, blob_name):
         # https://gist.github.com/jezhumble/91051485db4462add82045ef9ac2a0ec
