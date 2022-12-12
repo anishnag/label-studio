@@ -10,6 +10,7 @@ from django.conf import settings
 
 from users.models import User
 
+from pathy import Pathy
 
 EMAIL_MAX_LENGTH = 256
 PASS_MAX_LENGTH = 64
@@ -23,6 +24,7 @@ INVALID_USER_ERROR = 'The email and password you entered don\'t match.'
 
 logger = logging.getLogger(__name__)
 
+ANNOTATOR_PATH = "gs://prod_ello_data/annotations/annotators.txt"
 
 class LoginForm(forms.Form):
     """ For logging in to the app and all - session based
@@ -78,6 +80,13 @@ class UserSignupForm(forms.Form):
 
         if email and User.objects.filter(email=email).exists():
             raise forms.ValidationError('User with this email already exists')
+
+        # Read from list of whitelisted annotators
+        with Pathy(ANNOTATOR_PATH).open("r", buffering=8192) as f:
+            annotators = f.read().split("\n")
+
+        if email not in annotators:
+            raise forms.ValidationError('User not allowed to sign up')
 
         return email
 
